@@ -15,7 +15,7 @@ import {
   initialProducts,
   initialAdminUsers,
   initialPromoImages,
-} from './src/data/initialData';
+} from './src/data/initialData.js';
 
 const app = express();
 const PORT = 3000;
