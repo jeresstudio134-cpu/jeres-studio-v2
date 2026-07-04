@@ -608,23 +608,22 @@ app.post('/api/admin-users', async (req, res) => {
 
 // Vite Setup as Middleware / Static asset routing
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  // HANYA JALANKAN INI SAAT DI LOKAL (KOMPUTER), BUKAN DI VERCEL
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    // Di Vercel (Production), kita biarkan Vercel yang menangani file statis frontend.
+    // Kita hanya butuh backend Express-nya.
+    console.log("Running in Vercel Production mode (API only)");
   }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
 }
 
-startServer();
+// PENTING: Hapus startServer(); dari sini, biarkan Vercel yang memanggil app
+// startServer(); 
+
+// Ekspor app agar Vercel bisa membacanya sebagai Serverless Function
+export default app;
