@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { X, Printer, Download, Sparkles } from 'lucide-react';
-import { Order, ShopConfig } from '../types';
+import { Order, ShopConfig } from '../types.ts';
 
 interface InvoiceProps {
   order: Order | null;

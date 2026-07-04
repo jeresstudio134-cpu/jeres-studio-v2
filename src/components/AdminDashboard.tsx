@@ -36,7 +36,7 @@ import {
   Database,
   Server
 } from 'lucide-react';
-import { ShopConfig, Banner, Product, Order, AdminUser, OrderStatus, PromoImage } from '../types';
+import { ShopConfig, Banner, Product, Order, AdminUser, OrderStatus, PromoImage } from '../types.ts';
 
 interface AdminDashboardProps {
   dbStatus?: {

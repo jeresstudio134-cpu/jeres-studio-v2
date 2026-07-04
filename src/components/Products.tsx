@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { ChevronLeft, ChevronRight, ShoppingCart, Search, Filter, AlertTriangle, Sparkles, X, ZoomIn } from 'lucide-react';
-import { Product } from '../types';
+import { Product } from '../types.ts';
 
 interface ProductsProps {
   products: Product[];

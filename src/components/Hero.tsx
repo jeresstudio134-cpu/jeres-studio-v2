@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Sparkles, ShoppingBag, ArrowDown } from 'lucide-react';
-import { ShopConfig } from '../types';
+import { ShopConfig } from '../types.ts';
 
 interface HeroProps {
   shopConfig: ShopConfig;

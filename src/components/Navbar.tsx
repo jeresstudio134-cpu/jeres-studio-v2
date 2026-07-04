@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { ShoppingCart, LayoutDashboard, Store, Menu, X } from 'lucide-react';
-import { ShopConfig } from '../types';
+import { ShopConfig } from '../types.ts';
 
 interface NavbarProps {
   activeTab: 'home' | 'admin';

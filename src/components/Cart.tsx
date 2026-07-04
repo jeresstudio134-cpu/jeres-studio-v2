@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { X, Trash2, Plus, Minus, ShoppingBag, Send, CreditCard, Truck, User, MapPin, FileText } from 'lucide-react';
-import { CartItem, ShopConfig, Product, Order } from '../types';
+import { CartItem, ShopConfig, Product, Order } from '../types.ts';
 
 interface CartProps {
   isOpen: boolean;

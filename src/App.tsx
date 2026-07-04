@@ -10,8 +10,8 @@ import {
   initialProducts,
   initialAdminUsers,
   initialPromoImages,
-} from './data/initialData';
-import { ShopConfig, Banner, Product, CartItem, Order, AdminUser, PromoImage } from './types';
+} from './data/initialData.ts';
+import { ShopConfig, Banner, Product, CartItem, Order, AdminUser, PromoImage } from './types.ts';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import BannerSlider from './components/Banner';

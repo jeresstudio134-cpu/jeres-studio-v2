@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { ChevronLeft, ChevronRight, X, ZoomIn } from 'lucide-react';
-import { Banner } from '../types';
+import { Banner } from '../types.ts';
 
 interface BannerSliderProps {
   banners: Banner[];
