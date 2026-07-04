@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Theme overrides using user's requested colors: #4382DF (Primary blue), #FF62BB (Pink secondary), #FFD400 (Yellow accent) */
+  --color-emerald-50: #f0f6ff;
+  --color-emerald-100: #e0edff;
+  --color-emerald-200: #c2dbff;
+  --color-emerald-300: #94c1ff;
+  --color-emerald-400: #5c9eff;
+  --color-emerald-500: #4382df;
+  --color-emerald-600: #2d6cc5;
+  --color-emerald-700: #2254a3;
+  --color-emerald-800: #204784;
+  --color-emerald-900: #1f3d6e;
+
+  --color-rose-50: #fff0f8;
+  --color-rose-100: #ffe3f3;
+  --color-rose-200: #ffc7e7;
+  --color-rose-300: #ff9ccc;
+  --color-rose-400: #ff7cbd;
+  --color-rose-500: #ff62bb;
+  --color-rose-600: #e0469d;
+  --color-rose-700: #bc2e7d;
+  --color-rose-800: #9c2364;
+  --color-rose-900: #801d50;
+
+  --color-amber-50: #fffdeb;
+  --color-amber-100: #fff7c2;
+  --color-amber-200: #ffee85;
+  --color-amber-300: #ffe447;
+  --color-amber-400: #ffdc14;
+  --color-amber-500: #ffd400;
+  --color-amber-600: #d6aa00;
+  --color-amber-700: #a37a00;
+  --color-amber-800: #805e00;
+  --color-amber-900: #614600;
+
+  --color-teal-50: #fff0f8;
+  --color-teal-100: #ffe3f3;
+  --color-teal-200: #ffc7e7;
+  --color-teal-300: #ff9ccc;
+  --color-teal-400: #ff7cbd;
+  --color-teal-500: #ff62bb;
+  --color-teal-600: #ff62bb;
+  --color-teal-700: #bc2e7d;
+  --color-teal-800: #9c2364;
+  --color-teal-900: #801d50;
+}
+
+/* Custom Scrollbar styling for horizontal list filters */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom animations */
+@keyframes slideLeft {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom overlay prints sizing for A6 thermal printing paper rolls */
+@media print {
+  html, body {
+    height: 148mm !important;
+    max-height: 148mm !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* Hide everything on the body */
+  body * {
+    visibility: hidden !important;
+  }
+  /* Show only the invoice container and its children */
+  #a6-printable-invoice,
+  #a6-printable-invoice * {
+    visibility: visible !important;
+  }
+  /* Position the invoice precisely on the printable page */
+  #a6-printable-invoice {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 105mm !important;
+    max-width: 105mm !important;
+    height: 148mm !important;
+    max-height: 148mm !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  @page {
+    size: A6 portrait;
+    margin: 0;
+  }
+}

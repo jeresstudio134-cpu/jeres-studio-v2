@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Jeres Studio v2",
+  "description": "Website toko online modern lengkap dengan keranjang belanja, sistem checkout WhatsApp, manajemen stok, rekapitulasi pesanan real-time, cetak invoice A6, ekspor data, dan dashboard admin.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
