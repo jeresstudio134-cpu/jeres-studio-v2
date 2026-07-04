@@ -20,6 +20,20 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// --- DB INIT GUARD (fix race condition di serverless) ---
+let dbInitPromise: Promise<void> | null = null;
+function ensureDbInit() {
+  if (!dbInitPromise) {
+    dbInitPromise = initDatabase();
+  }
+  return dbInitPromise;
+}
+
+app.use(async (req, res, next) => {
+  await ensureDbInit();
+  next();
+});
+
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -246,8 +260,6 @@ async function initDatabase() {
     console.error('Failed to initialize Neon PostgreSQL database. Falling back to local states.', err);
   }
 }
-
-initDatabase();
 
 // --- API ENDPOINTS ---
 
