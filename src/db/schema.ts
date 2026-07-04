@@ -1,8 +1,8 @@
 import { relations } from 'drizzle-orm';
-import { int, mysqlTable, serial, varchar, text, timestamp, boolean } from 'drizzle-orm/mysql-core';
+import { integer, pgTable, serial, varchar, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 
 // Users table (uses Firebase UID as primary/unique key)
-export const users = mysqlTable('users', {
+export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   uid: varchar('uid', { length: 255 }).notNull().unique(), // Firebase Auth UID
   email: varchar('email', { length: 255 }).notNull(),
@@ -10,7 +10,7 @@ export const users = mysqlTable('users', {
 });
 
 // Shop Configuration table
-export const shopConfig = mysqlTable('shop_config', {
+export const shopConfig = pgTable('shop_config', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   tagline: varchar('tagline', { length: 255 }),
@@ -24,12 +24,12 @@ export const shopConfig = mysqlTable('shop_config', {
 });
 
 // Products table
-export const products = mysqlTable('products', {
+export const products = pgTable('products', {
   id: varchar('id', { length: 255 }).primaryKey(), // Using text IDs to match existing frontend client IDs (e.g., 'p1', 'p2')
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  price: int('price').notNull(),
-  stock: int('stock').default(0),
+  price: integer('price').notNull(),
+  stock: integer('stock').default(0),
   image: text('image'),
   category: varchar('category', { length: 255 }),
   status: varchar('status', { length: 50 }).default('Ready'), // Ready, Out of Stock, PO
@@ -37,15 +37,15 @@ export const products = mysqlTable('products', {
 });
 
 // Orders table
-export const orders = mysqlTable('orders', {
+export const orders = pgTable('orders', {
   id: varchar('id', { length: 255 }).primaryKey(), // Matching 'ord-1' etc.
   invoiceNumber: varchar('invoice_number', { length: 255 }).notNull().unique(),
   customerName: varchar('customer_name', { length: 255 }).notNull(),
   customerPhone: varchar('customer_phone', { length: 50 }).notNull(),
   customerAddress: text('customer_address').notNull(),
-  subtotal: int('subtotal').notNull(),
-  shippingFee: int('shipping_fee').notNull(),
-  total: int('total').notNull(),
+  subtotal: integer('subtotal').notNull(),
+  shippingFee: integer('shipping_fee').notNull(),
+  total: integer('total').notNull(),
   status: varchar('status', { length: 50 }).default('Pending'), // Pending, Proses, Selesai, Dibatalkan
   courier: varchar('courier', { length: 100 }),
   paymentMethod: varchar('payment_method', { length: 100 }),
@@ -54,13 +54,13 @@ export const orders = mysqlTable('orders', {
 });
 
 // Order items table (one-to-many relationship with orders)
-export const orderItems = mysqlTable('order_items', {
+export const orderItems = pgTable('order_items', {
   id: serial('id').primaryKey(),
   orderId: varchar('order_id', { length: 255 }).references(() => orders.id, { onDelete: 'cascade' }).notNull(),
   productId: varchar('product_id', { length: 255 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
-  quantity: int('quantity').notNull(),
-  price: int('price').notNull(),
+  quantity: integer('quantity').notNull(),
+  price: integer('price').notNull(),
   image: text('image'),
 });
 

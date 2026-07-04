@@ -1,9 +1,9 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import mysql from 'mysql2/promise';
+import { Pool } from '@neondatabase/serverless';
 import multer from 'multer';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
 
 import {
   initialShopConfig,
@@ -18,80 +18,75 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Create physical assets folder if it doesn't exist
-const assetsDir = path.join(process.cwd(), 'assets');
-if (!fs.existsSync(assetsDir)) {
-  fs.mkdirSync(assetsDir, { recursive: true });
-}
-
-// Serve assets folder statically in both dev and production
-app.use('/assets', express.static(assetsDir));
-
-// Configure multer storage for physical image saving
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, assetsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Configure multer storage in-memory for direct Cloudinary upload
+const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-// File Upload endpoint
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// Helper function to upload buffer to Cloudinary
+const uploadToCloudinary = (fileBuffer: Buffer, folder = 'jeres_studio') => {
+  return new Promise<{ secure_url: string }>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        if (!result) return reject(new Error('Cloudinary upload failed'));
+        resolve(result);
+      }
+    );
+    uploadStream.end(fileBuffer);
+  });
+};
+
+// File Upload endpoint using Cloudinary
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Tidak ada file yang diunggah' });
     }
-    // Return relative URL (e.g., assets/file.jpg)
-    const relativePath = `assets/${req.file.filename}`;
-    res.json({ url: relativePath });
+    const result = await uploadToCloudinary(req.file.buffer);
+    res.json({ url: result.secure_url });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Initialize MySQL pool configuration from environment variables
-const sqlHost = process.env.SQL_HOST || '127.0.0.1';
-const sqlPort = parseInt(process.env.SQL_PORT || '3306', 10);
-const sqlDbName = process.env.SQL_DB_NAME || 'db_jeres_studio';
-const sqlUser = process.env.SQL_USER || 'root';
-const sqlPassword = process.env.SQL_PASSWORD || '';
+// Initialize Neon PostgreSQL connection from environment variables
+const databaseUrl = process.env.DATABASE_URL || '';
 
 let isDbConnected = false;
 let dbErrorDetails = '';
-let pool: any = null;
+let pool: Pool | null = null;
 
 async function initDatabase() {
   try {
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is missing.');
+    }
     // Attempt connection
-    pool = mysql.createPool({
-      host: sqlHost,
-      port: sqlPort,
-      user: sqlUser,
-      password: sqlPassword,
-      database: sqlDbName,
-      connectionLimit: 10,
-      waitForConnections: true,
-      connectTimeout: 5000,
+    pool = new Pool({
+      connectionString: databaseUrl,
     });
 
-    const conn = await pool.getConnection();
-    await conn.ping();
-    console.log(`Connected to Laragon MySQL database: ${sqlDbName} at ${sqlHost}:${sqlPort}`);
+    const client = await pool.connect();
+    console.log(`Connected to Neon PostgreSQL database!`);
     isDbConnected = true;
 
-    // Create tables if not exist
-    await conn.query(`
+    // Create tables if not exist in PostgreSQL syntax
+    await client.query(`
       CREATE TABLE IF NOT EXISTS shop_config (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         tagline VARCHAR(255),
         address TEXT,
@@ -100,11 +95,11 @@ async function initDatabase() {
         dana VARCHAR(255),
         logo_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -118,7 +113,7 @@ async function initDatabase() {
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id VARCHAR(255) PRIMARY KEY,
         invoice_number VARCHAR(255) NOT NULL UNIQUE,
@@ -136,9 +131,9 @@ async function initDatabase() {
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS order_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         order_id VARCHAR(255) NOT NULL,
         product_id VARCHAR(255) NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -149,7 +144,7 @@ async function initDatabase() {
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS admin_users (
         id VARCHAR(255) PRIMARY KEY,
         username VARCHAR(255) NOT NULL UNIQUE,
@@ -160,7 +155,7 @@ async function initDatabase() {
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS banners (
         id VARCHAR(255) PRIMARY KEY,
         image_url TEXT NOT NULL,
@@ -171,7 +166,7 @@ async function initDatabase() {
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS promo_images (
         id VARCHAR(255) PRIMARY KEY,
         image_url TEXT NOT NULL,
@@ -182,10 +177,10 @@ async function initDatabase() {
     `);
 
     // Seed shop_config if empty
-    const [configRows]: any = await conn.query('SELECT COUNT(*) as count FROM shop_config');
-    if (configRows[0].count === 0) {
-      await conn.query(
-        'INSERT INTO shop_config (name, tagline, address, wa, logo_url) VALUES (?, ?, ?, ?, ?)',
+    const { rows: configRows } = await client.query('SELECT COUNT(*) as count FROM shop_config');
+    if (parseInt(configRows[0].count, 10) === 0) {
+      await client.query(
+        'INSERT INTO shop_config (name, tagline, address, wa, logo_url) VALUES ($1, $2, $3, $4, $5)',
         [
           initialShopConfig.name,
           initialShopConfig.description || 'Toko Online Terpercaya',
@@ -197,11 +192,11 @@ async function initDatabase() {
     }
 
     // Seed products if empty
-    const [prodRows]: any = await conn.query('SELECT COUNT(*) as count FROM products');
-    if (prodRows[0].count === 0) {
+    const { rows: prodRows } = await client.query('SELECT COUNT(*) as count FROM products');
+    if (parseInt(prodRows[0].count, 10) === 0) {
       for (const p of initialProducts) {
-        await conn.query(
-          'INSERT INTO products (id, name, description, price, stock, image, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        await client.query(
+          'INSERT INTO products (id, name, description, price, stock, image, category, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
           [
             p.id,
             p.name,
@@ -217,43 +212,43 @@ async function initDatabase() {
     }
 
     // Seed admin_users if empty
-    const [adminRows]: any = await conn.query('SELECT COUNT(*) as count FROM admin_users');
-    if (adminRows[0].count === 0) {
+    const { rows: adminRows } = await client.query('SELECT COUNT(*) as count FROM admin_users');
+    if (parseInt(adminRows[0].count, 10) === 0) {
       for (const u of initialAdminUsers) {
-        await conn.query(
-          'INSERT INTO admin_users (id, username, password_hash, name, role) VALUES (?, ?, ?, ?, ?)',
+        await client.query(
+          'INSERT INTO admin_users (id, username, password_hash, name, role) VALUES ($1, $2, $3, $4, $5)',
           [u.id, u.username, u.passwordHash, u.name, u.role]
         );
       }
     }
 
     // Seed banners if empty
-    const [bannerRows]: any = await conn.query('SELECT COUNT(*) as count FROM banners');
-    if (bannerRows[0].count === 0) {
+    const { rows: bannerRows } = await client.query('SELECT COUNT(*) as count FROM banners');
+    if (parseInt(bannerRows[0].count, 10) === 0) {
       for (const b of initialBanners) {
-        await conn.query(
-          'INSERT INTO banners (id, image_url, title, description, active) VALUES (?, ?, ?, ?, ?)',
+        await client.query(
+          'INSERT INTO banners (id, image_url, title, description, active) VALUES ($1, $2, $3, $4, $5)',
           [b.id, b.imageUrl, b.title, b.description, b.active]
         );
       }
     }
 
     // Seed promo_images if empty
-    const [promoRows]: any = await conn.query('SELECT COUNT(*) as count FROM promo_images');
-    if (promoRows[0].count === 0) {
+    const { rows: promoRows } = await client.query('SELECT COUNT(*) as count FROM promo_images');
+    if (parseInt(promoRows[0].count, 10) === 0) {
       for (const p of initialPromoImages) {
-        await conn.query(
-          'INSERT INTO promo_images (id, image_url, title, active) VALUES (?, ?, ?, ?)',
+        await client.query(
+          'INSERT INTO promo_images (id, image_url, title, active) VALUES ($1, $2, $3, $4)',
           [p.id, p.imageUrl, p.title, p.active]
         );
       }
     }
 
-    conn.release();
+    client.release();
   } catch (err: any) {
     isDbConnected = false;
     dbErrorDetails = err.message || String(err);
-    console.error('Failed to initialize Laragon MySQL database. Falling back to local states.', err);
+    console.error('Failed to initialize Neon PostgreSQL database. Falling back to local states.', err);
   }
 }
 
@@ -265,19 +260,19 @@ initDatabase();
 app.get('/api/db-status', (req, res) => {
   res.json({
     connected: isDbConnected,
-    host: sqlHost,
-    port: sqlPort,
-    database: sqlDbName,
-    user: sqlUser,
+    host: databaseUrl ? new URL(databaseUrl).hostname : 'localhost',
+    port: databaseUrl ? parseInt(new URL(databaseUrl).port || '5432', 10) : 5432,
+    database: databaseUrl ? new URL(databaseUrl).pathname.substring(1) : 'Neon PostgreSQL',
+    user: databaseUrl ? new URL(databaseUrl).username : 'cloud_user',
     error: dbErrorDetails,
   });
 });
 
 // Shop configuration
 app.get('/api/config', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [rows]: any = await pool.query('SELECT * FROM shop_config LIMIT 1');
+    const { rows } = await pool.query('SELECT * FROM shop_config LIMIT 1');
     if (rows.length > 0) {
       const row = rows[0];
       res.json({
@@ -299,13 +294,13 @@ app.get('/api/config', async (req, res) => {
 });
 
 app.post('/api/config', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const { name, description, address, whatsappNumber, logoUrl, tagline, gmail, wa, dana } = req.body;
-    const [rows]: any = await pool.query('SELECT id FROM shop_config LIMIT 1');
+    const { rows } = await pool.query('SELECT id FROM shop_config LIMIT 1');
     if (rows.length > 0) {
       await pool.query(
-        'UPDATE shop_config SET name = ?, tagline = ?, address = ?, gmail = ?, wa = ?, dana = ?, logo_url = ? WHERE id = ?',
+        'UPDATE shop_config SET name = $1, tagline = $2, address = $3, gmail = $4, wa = $5, dana = $6, logo_url = $7 WHERE id = $8',
         [
           name,
           tagline || description || '',
@@ -319,7 +314,7 @@ app.post('/api/config', async (req, res) => {
       );
     } else {
       await pool.query(
-        'INSERT INTO shop_config (name, tagline, address, wa, logo_url, gmail, dana) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO shop_config (name, tagline, address, wa, logo_url, gmail, dana) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [
           name,
           tagline || description || '',
@@ -339,9 +334,9 @@ app.post('/api/config', async (req, res) => {
 
 // Products catalog
 app.get('/api/products', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [rows]: any = await pool.query('SELECT * FROM products');
+    const { rows } = await pool.query('SELECT * FROM products');
     const mapped = rows.map((r: any) => ({
       id: r.id,
       name: r.name,
@@ -360,23 +355,16 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.post('/api/products', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const list = req.body; // array or single
     const productsArray = Array.isArray(list) ? list : [list];
 
     for (const p of productsArray) {
       await pool.query(
-        'INSERT INTO products (id, name, description, price, stock, image, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, description = ?, price = ?, stock = ?, image = ?, category = ?, status = ?',
+        'INSERT INTO products (id, name, description, price, stock, image, category, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, stock = EXCLUDED.stock, image = EXCLUDED.image, category = EXCLUDED.category, status = EXCLUDED.status',
         [
           p.id,
-          p.name,
-          p.description || '',
-          p.price,
-          p.stock || 0,
-          p.image || (p.images && p.images[0]) || '',
-          p.category || '',
-          p.status || 'Ready',
           p.name,
           p.description || '',
           p.price,
@@ -394,9 +382,9 @@ app.post('/api/products', async (req, res) => {
 });
 
 app.delete('/api/products/:id', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
+    await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -405,9 +393,9 @@ app.delete('/api/products/:id', async (req, res) => {
 
 // Banners list
 app.get('/api/banners', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [rows]: any = await pool.query('SELECT * FROM banners');
+    const { rows } = await pool.query('SELECT * FROM banners');
     const mapped = rows.map((r: any) => ({
       id: r.id,
       imageUrl: r.image_url,
@@ -422,14 +410,14 @@ app.get('/api/banners', async (req, res) => {
 });
 
 app.post('/api/banners', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const bannersList = req.body;
     await pool.query('DELETE FROM banners');
     for (const b of bannersList) {
       await pool.query(
-        'INSERT INTO banners (id, image_url, title, description, active) VALUES (?, ?, ?, ?, ?)',
-        [b.id, b.imageUrl, b.title || '', b.description || '', b.active ? 1 : 0]
+        'INSERT INTO banners (id, image_url, title, description, active) VALUES ($1, $2, $3, $4, $5)',
+        [b.id, b.imageUrl, b.title || '', b.description || '', b.active ? true : false]
       );
     }
     res.json({ success: true });
@@ -440,9 +428,9 @@ app.post('/api/banners', async (req, res) => {
 
 // Promo images list
 app.get('/api/promo-images', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [rows]: any = await pool.query('SELECT * FROM promo_images');
+    const { rows } = await pool.query('SELECT * FROM promo_images');
     const mapped = rows.map((r: any) => ({
       id: r.id,
       imageUrl: r.image_url,
@@ -456,14 +444,14 @@ app.get('/api/promo-images', async (req, res) => {
 });
 
 app.post('/api/promo-images', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const list = req.body;
     await pool.query('DELETE FROM promo_images');
     for (const p of list) {
       await pool.query(
-        'INSERT INTO promo_images (id, image_url, title, active) VALUES (?, ?, ?, ?)',
-        [p.id, p.imageUrl, p.title || '', p.active ? 1 : 0]
+        'INSERT INTO promo_images (id, image_url, title, active) VALUES ($1, $2, $3, $4)',
+        [p.id, p.imageUrl, p.title || '', p.active ? true : false]
       );
     }
     res.json({ success: true });
@@ -474,13 +462,13 @@ app.post('/api/promo-images', async (req, res) => {
 
 // Orders details
 app.get('/api/orders', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [orderRows]: any = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    const { rows: orderRows } = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
     const ordersWithItems = [];
 
     for (const ord of orderRows) {
-      const [itemRows]: any = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [ord.id]);
+      const { rows: itemRows } = await pool.query('SELECT * FROM order_items WHERE order_id = $1', [ord.id]);
       ordersWithItems.push({
         id: ord.id,
         invoiceNumber: ord.invoice_number,
@@ -511,7 +499,7 @@ app.get('/api/orders', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const {
       id,
@@ -530,7 +518,7 @@ app.post('/api/orders', async (req, res) => {
     } = req.body;
 
     await pool.query(
-      'INSERT INTO orders (id, invoice_number, customer_name, customer_phone, customer_address, subtotal, shipping_fee, total, status, courier, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (id, invoice_number, customer_name, customer_phone, customer_address, subtotal, shipping_fee, total, status, courier, payment_method, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)',
       [
         id,
         invoiceNumber,
@@ -549,11 +537,11 @@ app.post('/api/orders', async (req, res) => {
 
     for (const item of items) {
       await pool.query(
-        'INSERT INTO order_items (order_id, product_id, name, quantity, price, image) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO order_items (order_id, product_id, name, quantity, price, image) VALUES ($1, $2, $3, $4, $5, $6)',
         [id, item.productId, item.name, item.quantity, item.price, item.image || '']
       );
 
-      await pool.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [
+      await pool.query('UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2', [
         item.quantity,
         item.productId,
       ]);
@@ -566,11 +554,11 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.put('/api/orders/:id', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const { status, courier, paymentMethod } = req.body;
     await pool.query(
-      'UPDATE orders SET status = ?, courier = ?, payment_method = ? WHERE id = ?',
+      'UPDATE orders SET status = $1, courier = $2, payment_method = $3 WHERE id = $4',
       [status, courier || '', paymentMethod || '', req.params.id]
     );
     res.json({ success: true });
@@ -581,9 +569,9 @@ app.put('/api/orders/:id', async (req, res) => {
 
 // Admin Users management
 app.get('/api/admin-users', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const [rows]: any = await pool.query('SELECT * FROM admin_users');
+    const { rows } = await pool.query('SELECT * FROM admin_users');
     const mapped = rows.map((r: any) => ({
       id: r.id,
       username: r.username,
@@ -598,13 +586,13 @@ app.get('/api/admin-users', async (req, res) => {
 });
 
 app.post('/api/admin-users', async (req, res) => {
-  if (!isDbConnected) return res.status(503).json({ error: 'Database offline' });
+  if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
     const list = req.body;
     await pool.query('DELETE FROM admin_users');
     for (const u of list) {
       await pool.query(
-        'INSERT INTO admin_users (id, username, password_hash, name, role) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO admin_users (id, username, password_hash, name, role) VALUES ($1, $2, $3, $4, $5)',
         [u.id, u.username, u.passwordHash, u.name, u.role]
       );
     }
