@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ShopConfig, Banner, Product, AdminUser, PromoImage } from '../types.ts';
+import type { ShopConfig, Banner, Product, AdminUser, PromoImage } from '../types.js';
 
 export const initialShopConfig: ShopConfig = {
   name: "Jeres Studio",
