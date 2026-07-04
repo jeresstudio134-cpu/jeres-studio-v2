@@ -1,10 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { Pool } from '@neondatabase/serverless';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
@@ -78,7 +76,6 @@ async function initDatabase() {
     if (!databaseUrl) {
       throw new Error('DATABASE_URL environment variable is missing.');
     }
-    // Attempt connection
     pool = new Pool({
       connectionString: databaseUrl,
     });
@@ -87,7 +84,6 @@ async function initDatabase() {
     console.log(`Connected to Neon PostgreSQL database!`);
     isDbConnected = true;
 
-    // Create tables if not exist in PostgreSQL syntax
     await client.query(`
       CREATE TABLE IF NOT EXISTS shop_config (
         id SERIAL PRIMARY KEY,
@@ -180,7 +176,6 @@ async function initDatabase() {
       )
     `);
 
-    // Seed shop_config if empty
     const { rows: configRows } = await client.query('SELECT COUNT(*) as count FROM shop_config');
     if (parseInt(configRows[0].count, 10) === 0) {
       await client.query(
@@ -195,7 +190,6 @@ async function initDatabase() {
       );
     }
 
-    // Seed products if empty
     const { rows: prodRows } = await client.query('SELECT COUNT(*) as count FROM products');
     if (parseInt(prodRows[0].count, 10) === 0) {
       for (const p of initialProducts) {
@@ -215,7 +209,6 @@ async function initDatabase() {
       }
     }
 
-    // Seed admin_users if empty
     const { rows: adminRows } = await client.query('SELECT COUNT(*) as count FROM admin_users');
     if (parseInt(adminRows[0].count, 10) === 0) {
       for (const u of initialAdminUsers) {
@@ -226,7 +219,6 @@ async function initDatabase() {
       }
     }
 
-    // Seed banners if empty
     const { rows: bannerRows } = await client.query('SELECT COUNT(*) as count FROM banners');
     if (parseInt(bannerRows[0].count, 10) === 0) {
       for (const b of initialBanners) {
@@ -237,7 +229,6 @@ async function initDatabase() {
       }
     }
 
-    // Seed promo_images if empty
     const { rows: promoRows } = await client.query('SELECT COUNT(*) as count FROM promo_images');
     if (parseInt(promoRows[0].count, 10) === 0) {
       for (const p of initialPromoImages) {
@@ -260,7 +251,6 @@ initDatabase();
 
 // --- API ENDPOINTS ---
 
-// Database status
 app.get('/api/db-status', (req, res) => {
   res.json({
     connected: isDbConnected,
@@ -272,7 +262,6 @@ app.get('/api/db-status', (req, res) => {
   });
 });
 
-// Shop configuration
 app.get('/api/config', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -336,7 +325,6 @@ app.post('/api/config', async (req, res) => {
   }
 });
 
-// Products catalog
 app.get('/api/products', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -361,7 +349,7 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/products', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
-    const list = req.body; // array or single
+    const list = req.body;
     const productsArray = Array.isArray(list) ? list : [list];
 
     for (const p of productsArray) {
@@ -395,7 +383,6 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// Banners list
 app.get('/api/banners', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -430,7 +417,6 @@ app.post('/api/banners', async (req, res) => {
   }
 });
 
-// Promo images list
 app.get('/api/promo-images', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -464,7 +450,6 @@ app.post('/api/promo-images', async (req, res) => {
   }
 });
 
-// Orders details
 app.get('/api/orders', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -571,7 +556,6 @@ app.put('/api/orders/:id', async (req, res) => {
   }
 });
 
-// Admin Users management
 app.get('/api/admin-users', async (req, res) => {
   if (!isDbConnected || !pool) return res.status(503).json({ error: 'Database offline' });
   try {
@@ -606,24 +590,22 @@ app.post('/api/admin-users', async (req, res) => {
   }
 });
 
-// Vite Setup as Middleware / Static asset routing
+// Vite Setup as Middleware / Static asset routing (dev only)
 async function startServer() {
-  // HANYA JALANKAN INI SAAT DI LOKAL (KOMPUTER), BUKAN DI VERCEL
   if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    // Di Vercel (Production), kita biarkan Vercel yang menangani file statis frontend.
-    // Kita hanya butuh backend Express-nya.
     console.log("Running in Vercel Production mode (API only)");
   }
 }
 
 // PENTING: Hapus startServer(); dari sini, biarkan Vercel yang memanggil app
-// startServer(); 
+// startServer();
 
 // Ekspor app agar Vercel bisa membacanya sebagai Serverless Function
 export default app;
